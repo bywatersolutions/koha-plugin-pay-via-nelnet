@@ -71,25 +71,11 @@ sub opac_online_payment_begin {
     my $rs = Koha::Database->new()->schema()->resultset('Accountline');
     my @accountlines = map { $rs->find($_) } @accountline_ids;
 
-    my $token = "B" . $borrowernumber . "T" . time;
-    C4::Context->dbh->do(
-        q{
-		INSERT INTO paygov_plugin_tokens ( token, borrowernumber )
-        VALUES ( ?, ? )
-	}, undef, $token, $borrowernumber
-    );
-
     $template->param(
         borrower             => scalar Koha::Patrons->find($borrowernumber),
         payment_method       => scalar $cgi->param('payment_method'),
         enable_opac_payments => $self->retrieve_data('enable_opac_payments'),
-        NelnetPostUrl        => $self->retrieve_data('NelnetPostUrl'),
-        NelnetMerchantCode   => $self->retrieve_data('NelnetMerchantCode'),
-        NelnetSettleCode     => $self->retrieve_data('NelnetSettleCode'),
-        NelnetApiUrl         => $self->retrieve_data('NelnetApiUrl'),
-        NelnetApiPassword    => $self->retrieve_data('NelnetApiPassword'),
         accountlines         => \@accountlines,
-        token                => $token,
     );
 
     print $cgi->header();
@@ -110,7 +96,7 @@ sub opac_online_payment_end {
         }
     );
     my %vars = $cgi->Vars();
-    warn "PAYGOV INCOMIGN: " . Data::Dumper::Dumper( \%vars );
+    warn "NELNET INCOMING: " . Data::Dumper::Dumper( \%vars );
 
     my $amount   = $vars{Amount};
     my $authcode = $vars{authcode};
