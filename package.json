@@ -1,8 +1,8 @@
 {
-  "name": "koha-plugin-pay-via-paygov",
+  "name": "koha-plugin-pay-via-nelnet",
   "version": "1.0.5",
   "previous_version": "1.0.4",
-  "description": "Koha PayGov OPAC Online Payment Plugin",
+  "description": "Koha Nelnet OPAC Online Payment Plugin",
   "devDependencies": {
     "gulp": "^3.9.1",
     "gulp-cli": "^1.2.2",
@@ -14,14 +14,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bywatersolutions/koha-plugin-pay-via-paygov.git"
+    "url": "git+https://github.com/bywatersolutions/koha-plugin-pay-via-nelnet.git"
   },
   "author": "Kyle M Hall <kyle@bywatersolutions.com>",
   "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/bywatersolutions/koha-plugin-pay-via-paygov/issues"
+    "url": "https://github.com/bywatersolutions/koha-plugin-pay-via-nelnet/issues"
   },
-  "homepage": "https://github.com/bywatersolutions/koha-plugin-pay-via-paygov#readme",
+  "homepage": "https://github.com/bywatersolutions/koha-plugin-pay-via-nelnet#readme",
   "dependencies": {
     "datetime": "0.0.3",
     "gulp-replace": "^0.6.1",

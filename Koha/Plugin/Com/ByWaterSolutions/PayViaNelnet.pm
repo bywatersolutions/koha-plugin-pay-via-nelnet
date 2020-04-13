@@ -1,4 +1,4 @@
-package Koha::Plugin::Com::ByWaterSolutions::PayViaPayGov;
+package Koha::Plugin::Com::ByWaterSolutions::PayViaPayNelnet;
 
 use Modern::Perl;
 
@@ -19,9 +19,9 @@ our $VERSION = "{VERSION}";
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
-    name          => 'Pay Via PayGov',
+    name          => 'Pay Via Nelnet',
     author        => 'Kyle M Hall',
-    description   => 'This plugin enables online OPAC fee payments via PayGov',
+    description   => 'This plugin enables online OPAC fee payments via Nelnet',
     date_authored => '2018-11-27',
     date_updated  => '1900-01-01',
     minimum_version => '18.00.00.000',
@@ -83,11 +83,11 @@ sub opac_online_payment_begin {
         borrower             => scalar Koha::Patrons->find($borrowernumber),
         payment_method       => scalar $cgi->param('payment_method'),
         enable_opac_payments => $self->retrieve_data('enable_opac_payments'),
-        PayGovPostUrl        => $self->retrieve_data('PayGovPostUrl'),
-        PayGovMerchantCode   => $self->retrieve_data('PayGovMerchantCode'),
-        PayGovSettleCode     => $self->retrieve_data('PayGovSettleCode'),
-        PayGovApiUrl         => $self->retrieve_data('PayGovApiUrl'),
-        PayGovApiPassword    => $self->retrieve_data('PayGovApiPassword'),
+        NelnetPostUrl        => $self->retrieve_data('NelnetPostUrl'),
+        NelnetMerchantCode   => $self->retrieve_data('NelnetMerchantCode'),
+        NelnetSettleCode     => $self->retrieve_data('NelnetSettleCode'),
+        NelnetApiUrl         => $self->retrieve_data('NelnetApiUrl'),
+        NelnetApiPassword    => $self->retrieve_data('NelnetApiPassword'),
         accountlines         => \@accountlines,
         token                => $token,
     );
@@ -130,7 +130,7 @@ sub opac_online_payment_end {
     my ( $m, $v );
     if ( $authcode eq 'SUCCESS' ) {
         if ($token_hr) {
-            my $note = "PayGov ($order_id)";
+            my $note = "Nelnet ($order_id)";
 
             # If this note is found, it must be a duplicate post
             unless (
@@ -203,11 +203,11 @@ sub configure {
         $template->param(
             enable_opac_payments =>
               $self->retrieve_data('enable_opac_payments'),
-            PayGovPostUrl      => $self->retrieve_data('PayGovPostUrl'),
-            PayGovMerchantCode => $self->retrieve_data('PayGovMerchantCode'),
-            PayGovSettleCode   => $self->retrieve_data('PayGovSettleCode'),
-            PayGovApiUrl       => $self->retrieve_data('PayGovApiUrl'),
-            PayGovApiPassword  => $self->retrieve_data('PayGovApiPassword'),
+            NelnetPostUrl      => $self->retrieve_data('NelnetPostUrl'),
+            NelnetMerchantCode => $self->retrieve_data('NelnetMerchantCode'),
+            NelnetSettleCode   => $self->retrieve_data('NelnetSettleCode'),
+            NelnetApiUrl       => $self->retrieve_data('NelnetApiUrl'),
+            NelnetApiPassword  => $self->retrieve_data('NelnetApiPassword'),
         );
 
         print $cgi->header();
@@ -217,11 +217,11 @@ sub configure {
         $self->store_data(
             {
                 enable_opac_payments => $cgi->param('enable_opac_payments'),
-                PayGovPostUrl        => $cgi->param('PayGovPostUrl'),
-                PayGovMerchantCode   => $cgi->param('PayGovMerchantCode'),
-                PayGovSettleCode     => $cgi->param('PayGovSettleCode'),
-                PayGovApiUrl         => $cgi->param('PayGovApiUrl'),
-                PayGovApiPassword    => $cgi->param('PayGovApiPassword'),
+                NelnetPostUrl        => $cgi->param('NelnetPostUrl'),
+                NelnetMerchantCode   => $cgi->param('NelnetMerchantCode'),
+                NelnetSettleCode     => $cgi->param('NelnetSettleCode'),
+                NelnetApiUrl         => $cgi->param('NelnetApiUrl'),
+                NelnetApiPassword    => $cgi->param('NelnetApiPassword'),
             }
         );
         $self->go_home();
