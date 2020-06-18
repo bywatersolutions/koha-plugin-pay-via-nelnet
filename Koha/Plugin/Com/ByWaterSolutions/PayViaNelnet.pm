@@ -152,7 +152,7 @@ sub opac_online_payment_end {
     }
     elsif ( $transaction_status eq '1' ) { # Success
         if ($token_hr) {
-            my $note = "Nelnet ($transaction_id)";
+            my $note = "Nelnet";
 
             # If this note is found, it must be a duplicate post
             unless (
