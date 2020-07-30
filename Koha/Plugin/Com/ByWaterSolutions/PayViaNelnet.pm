@@ -12,6 +12,7 @@ use Koha::Account;
 use Koha::Account::Lines;
 use List::Util qw(sum);
 use Digest::SHA qw(sha256);
+use Time::HiRes qw(gettimeofday);
 
 ## Here we set our plugin version
 our $VERSION = "{VERSION}";
@@ -92,7 +93,7 @@ sub opac_online_payment_begin {
     $url_params->{redirectUrl} = C4::Context->preference('OPACBaseURL') . "/cgi-bin/koha/opac-account-pay-return.pl?payment_method=Koha::Plugin::Com::ByWaterSolutions::PayViaPayGov";
     $url_params->{redirectUrlParameters} = "userChoice1,userChoice2,userChoices3,transactionType,transactionStatus,transactionId,transactionResultCode,transactionResultMessage,orderAmount";
     $url_params->{retriesAllowed} = 1;
-    $url_params->{timestamp} = time;
+    $url_params->{timestamp} = int (gettimeofday * 1000); # Epoch time in milliseconds
     $url_params->{key} = $self->retrieve_data('key');
 
     my $combined_url_values = join( ',', values %$url_params );
