@@ -71,7 +71,7 @@
                         </tfoot>
                     </table>
 
-                    <a href="[% url %]?[% url_params %]" class="btn">Yes, proceed with payment</a>
+                    <a href="[% url %][% url_combined_params %]" class="btn">Yes, proceed with payment</a>
                 </div> <!-- / #useraccount -->
             </div> <!-- / .span10 -->
         </div> <!-- / .row-fluid -->

@@ -11,7 +11,8 @@ use C4::Auth;
 use Koha::Account;
 use Koha::Account::Lines;
 use List::Util qw(sum);
-use Digest::SHA qw(sha256);
+use Digest::SHA qw(sha256_hex);
+use URI::Encode;
 use Time::HiRes qw(gettimeofday);
 
 ## Here we set our plugin version
@@ -97,8 +98,19 @@ sub opac_online_payment_begin {
     $url_params->{key} = $self->retrieve_data('key');
 
     my $combined_url_values = join( ',', values %$url_params );
-    my $sha256 = Digest::SHA::sha256( $combined_url_values );
-    $url_params->{hash} = $sha256;
+    my $sha256 = sha256_hex( $combined_url_values );
+    warn "SHA256: $sha256";
+
+    my @params;
+    
+    my $uri = URI::Encode->new( { encode_reserved => 1 } );
+    foreach my $key ( keys %$url_params ) {
+        my $value = $uri->encode( $url_params->{$key} );
+        push( @params, "$key=$value" );
+    }
+    my $combined_params = join( '&', @params );
+    $combined_params .= "&hash=$sha256";
+    warn "COMBINED PARAMS: $combined_params";
 
     $template->param(
         borrower             => $patron,
@@ -107,6 +119,7 @@ sub opac_online_payment_begin {
         accountlines         => \@accountlines,
         url                  => $self->retrieve_data('url'),
         url_params           => $url_params,
+        url_combined_params  => $combined_params,
     );
 
     print $cgi->header();
@@ -153,7 +166,7 @@ sub opac_online_payment_end {
     }
     elsif ( $transaction_status eq '1' ) { # Success
         if ($token_hr) {
-            my $note = "Nelnet";
+            my $note = "Nelnet ($transaction_id)";
 
             # If this note is found, it must be a duplicate post
             unless (
