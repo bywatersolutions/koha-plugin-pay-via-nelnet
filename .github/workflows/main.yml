@@ -21,7 +21,7 @@ jobs:
       run: |
         cd ..
         git clone --branch ${{ steps.koha-version.outputs.current-branch-name }} --single-branch --depth 1 git://git.koha-community.org/koha.git kohaclone
-      
+
     - name: Export additional variables needed by koha-testing-docker
       run: |
         cd ..
@@ -74,6 +74,7 @@ jobs:
         sleep 60
         echo "3 MINUTES DONE"
         echo "WAKING UP"
+        docker exec koha_koha_1 sudo cpanm URI::Encode
         docker cp $GITHUB_REPO/. koha_koha_1:/var/lib/koha/kohadev/plugins
         docker exec koha_koha_1 bash -c 'prove /var/lib/koha/kohadev/plugins/t'
         
