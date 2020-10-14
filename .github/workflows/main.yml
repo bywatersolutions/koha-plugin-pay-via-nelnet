@@ -77,6 +77,7 @@ jobs:
         docker exec koha_koha_1 sudo cpanm URI::Encode
         docker cp $GITHUB_REPO/. koha_koha_1:/var/lib/koha/kohadev/plugins
         docker exec koha_koha_1 bash -c 'prove /var/lib/koha/kohadev/plugins/t'
+        docker logs koha_koha_1
         
     - name: Post test cleanup
       run: |
