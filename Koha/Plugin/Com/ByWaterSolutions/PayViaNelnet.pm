@@ -82,35 +82,39 @@ sub opac_online_payment_begin {
     }, undef, $token, $borrowernumber
     );
 
-    my $url_params = {};
-    $url_params->{userChoice1} = $patron->id; # Borrowernumber for verification
-    $url_params->{userChoice2} = join( ',', map { $_->id } @accountlines ); # Accountlines to pay
-    $url_params->{userChoice3} = $token; # Token we generate to avoid duplicate or false payments in Koha
-    $url_params->{orderType} = $self->retrieve_data('order_type');
-    $url_params->{orderNumber} = $accountlines[0]->id;
-    $url_params->{orderName} = $patron->firstname . $patron->surname;
-    $url_params->{orderDescription} = "Payment of library fees";
-    $url_params->{amount} = sum( map { $_->amountoutstanding } @accountlines );
-    $url_params->{redirectUrl} = C4::Context->preference('OPACBaseURL') . "/cgi-bin/koha/opac-account-pay-return.pl?payment_method=Koha::Plugin::Com::ByWaterSolutions::PayViaPayGov";
-    $url_params->{redirectUrlParameters} = "userChoice1,userChoice2,userChoices3,transactionType,transactionStatus,transactionId,transactionResultCode,transactionResultMessage,orderAmount";
-    $url_params->{retriesAllowed} = 1;
-    $url_params->{timestamp} = int (gettimeofday * 1000); # Epoch time in milliseconds
-    $url_params->{key} = $self->retrieve_data('key');
+    my $amount = sprintf("%.2f", sum( map { $_->amountoutstanding } @accountlines ) );
+    $amount =~ s/\.//; # Amount should be formatted as cents, e.g. $1.99 => 199
 
-    my $combined_url_values = join( ',', values %$url_params );
+    my $redirect_url = C4::Context->preference('OPACBaseURL') . "/cgi-bin/koha/opac-account-pay-return.pl?payment_method=Koha::Plugin::Com::ByWaterSolutions::PayViaNelnet";
+    my $redirectUrlParameters = "transactionType,transactionStatus,transactionId,transactionResultCode,transactionResultMessage,orderAmount,userChoice1,userChoice2,userChoice3";
+
+    my $url_params = [];
+    $url_params->[0] = { key => 'orderType', val => $self->retrieve_data('order_type')};
+    $url_params->[1] = { key => 'orderNumber', val => $accountlines[0]->id};
+    $url_params->[2] = { key => 'orderName', val => $patron->firstname . $patron->surname};
+    $url_params->[3] = { key => 'orderDescription', val => "Payment of library fees"};
+    $url_params->[4] = { key => 'amount', val => $amount };
+    $url_params->[5] = { key => 'userChoice1', val => $patron->id }; # Borrowernumber for verification
+    $url_params->[6] = { key => 'userChoice2', val => join( ',', map { $_->id } @accountlines ) }; # Accountlines to pay
+    $url_params->[7] = { key => 'userChoice3', val => $token }; # Token we generate to avoid duplicate or false payments in Koha
+    $url_params->[8] = { key => 'redirectUrl', val => $redirect_url };
+    $url_params->[9] = { key => 'redirectUrlParameters', val => $redirectUrlParameters };
+    $url_params->[10] = { key => 'retriesAllowed', val => 1};
+    $url_params->[11] = { key => 'timestamp', val => int (gettimeofday * 1000)}; # Epoch time in milliseconds
+    $url_params->[12] = { key => 'key', val => $self->retrieve_data('key') };
+
+    my $combined_url_values = join( '', map { $_->{val}} @$url_params );
     my $sha256 = sha256_hex( $combined_url_values );
-    warn "SHA256: $sha256";
 
     my @params;
     
-    my $uri = URI::Encode->new( { encode_reserved => 1 } );
-    foreach my $key ( keys %$url_params ) {
-        my $value = $uri->encode( $url_params->{$key} );
+    foreach my $elt ( @$url_params ) {
+        my $key = $elt->{key};
+        my $value = $elt->{val}; #= $uri->encode( $elt->{val} );
         push( @params, "$key=$value" );
     }
     my $combined_params = join( '&', @params );
     $combined_params .= "&hash=$sha256";
-    warn "COMBINED PARAMS: $combined_params";
 
     $template->param(
         borrower             => $patron,
@@ -140,21 +144,19 @@ sub opac_online_payment_end {
         }
     );
     my %vars = $cgi->Vars();
-    warn "NELNET INCOMING: " . Data::Dumper::Dumper( \%vars );
+    #warn "NELNET INCOMING: " . Data::Dumper::Dumper( \%vars );
 
     my $borrowernumber = $vars{userChoice1};
     my $accountline_ids = $vars{userChoice2};
     my $token = $vars{userChoice3};
 
-    my $type = $vars{transactionType};
     my $transaction_status = $vars{transactionStatus};
     my $transaction_id = $vars{transactionId};
-    my $transaction_result_code = $vars{transactionResultCode};
     my $transaction_result_message = $vars{transactionResultMessage};
-    my $order_amount = $vars{orderAmount};
+    my $order_amount = sprintf("%.2f", $vars{orderAmount} / 100 );
 
     my $dbh      = C4::Context->dbh;
-    my $query    = "SELECT * FROM paygov_plugin_tokens WHERE token = ?";
+    my $query    = "SELECT * FROM nelnet_plugin_tokens WHERE token = ?";
     my $token_hr = $dbh->selectrow_hashref( $query, undef, $token );
 
     my $accountlines = [ split( ',', $accountline_ids ) ];
@@ -166,7 +168,7 @@ sub opac_online_payment_end {
     }
     elsif ( $transaction_status eq '1' ) { # Success
         if ($token_hr) {
-            my $note = "Nelnet ($transaction_id)";
+            my $note = "Paid via NelNet: " . sha256_hex( $transaction_id );
 
             # If this note is found, it must be a duplicate post
             unless (
@@ -179,13 +181,12 @@ sub opac_online_payment_end {
                 my $schema = Koha::Database->new->schema;
 
                 my @lines = Koha::Account::Lines->search({ accountlines_id => { -in => $accountlines} });
-                warn "ACCOUNTLINES TO PAY: ";
-                warn Data::Dumper::Dumper( $_->unblessed ) for @lines;
+                #warn "ACCOUNTLINES TO PAY: " . Data::Dumper::Dumper( $_->unblessed ) for @lines;
 
                $schema->txn_do(
                     sub {
                         $dbh->do(
-                            "DELETE FROM paygov_plugin_tokens WHERE token = ?",
+                            "DELETE FROM nelnet_plugin_tokens WHERE token = ?",
                             undef, $token
                         );
 
@@ -214,6 +215,9 @@ sub opac_online_payment_end {
         }
     }
     else {
+        # 1 = Accepted credit card payment/refund (successful)
+        # 2 = Rejected credit card payment/refund (declined)
+        # 3 - Error credit card payment/refund (error)
         $m = 'payment_failed';
         $v = $transaction_id;
     }
@@ -263,7 +267,7 @@ sub install() {
     my $dbh = C4::Context->dbh();
 
     my $query = q{
-		CREATE TABLE IF NOT EXISTS paygov_plugin_tokens
+		CREATE TABLE IF NOT EXISTS nelnet_plugin_tokens
 		  (
 			 token          VARCHAR(128),
 			 created_on     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
