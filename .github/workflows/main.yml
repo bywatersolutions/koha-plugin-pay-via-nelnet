@@ -121,7 +121,7 @@ jobs:
       id: kpz
       uses: "bywatersolutions/github-action-koha-plugin-create-kpz@master"
       with:
-        release-version: ${{ steps.semvers.outputs.v_patch }}
+        release-version: ${{ steps.semvers.outputs.patch }}
         release-name: ${{ steps.myvars.outputs.GITHUB_REPO }}
 
     - name: See if kpz was created
