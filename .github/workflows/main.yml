@@ -1,5 +1,12 @@
 name: CI
-on: [push]
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*.*.*'
+  schedule:
+    - cron: "0 6 * * *"
 jobs:
   unit_tests:
     name: Run unit tests
@@ -8,7 +15,33 @@ jobs:
       fail-fast: false
       matrix:
         koha-version: [master, stable, oldstable]
+
     steps:
+
+    - name: Is a tag?
+      run: |
+        echo "${{ startsWith(github.ref, 'refs/tags/v') }}"
+
+    - name: GitHub Ref 1
+      run: |
+        echo "${GITHUB_REF##*/}"
+
+    - name: GitHub Ref 2
+      run: |
+        echo "${{ github.event.ref }}"
+
+    - name: GitHub Ref 3
+      run: |
+        echo "${{ github.ref }}"
+
+    - name: Dump env
+      run: env | sort
+
+    - name: Dump GitHub context
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: echo "$GITHUB_CONTEXT"
+
     - uses: actions/checkout@v1
 
     - name: Get Koha Version Branch Name
@@ -21,7 +54,7 @@ jobs:
       run: |
         cd ..
         git clone --branch ${{ steps.koha-version.outputs.current-branch-name }} --single-branch --depth 1 https://github.com/Koha-Community/Koha.git kohaclone
-
+      
     - name: Export additional variables needed by koha-testing-docker
       run: |
         cd ..
@@ -34,14 +67,14 @@ jobs:
         export SYNC_REPO="$ROOT_DIR/kohaclone"
         export KOHA_INTRANET_URL="http://127.0.0.1:8081"
         export KOHA_MARC_FLAVOUR="marc21"
-        echo ::set-env name=GITHUB_REPO::$GITHUB_REPO
-        echo ::set-env name=ROOT_DIR::$ROOT_DIR
-        echo ::set-env name=LOCAL_USER_ID::$LOCAL_USER_ID
-        echo ::set-env name=SYNC_REPO::$SYNC_REPO
-        echo ::set-env name=KOHA_INTRANET_URL::$KOHA_INTRANET_URL
-        echo ::set-env name=KOHA_MARC_FLAVOUR::$KOHA_MARC_FLAVOUR
-        echo ::set-env name=RUN_TESTS_AND_EXIT::no
-        echo ::set-env name=KOHA_IMAGE::master
+        echo "GITHUB_REPO=$GITHUB_REPO" >> $GITHUB_ENV
+        echo "ROOT_DIR=$ROOT_DIR" >> $GITHUB_ENV
+        echo "LOCAL_USER_ID=$LOCAL_USER_ID" >> $GITHUB_ENV
+        echo "SYNC_REPO=$SYNC_REPO" >> $GITHUB_ENV
+        echo "KOHA_INTRANET_URL=$KOHA_INTRANET_URL" >> $GITHUB_ENV
+        echo "KOHA_MARC_FLAVOUR=$KOHA_MARC_FLAVOUR" >> $GITHUB_ENV
+        echo "RUN_TESTS_AND_EXIT=no" >> $GITHUB_ENV
+        echo "KOHA_IMAGE=master" >> $GITHUB_ENV
         echo "GITHUB REPO: $GITHUB_REPO"
         echo "ROOT DIR: $ROOT_DIR"
         echo "SYNC_REPO: $SYNC_REPO"
@@ -66,6 +99,9 @@ jobs:
         cd ..
         pwd
         ls -alh
+        echo "`date`: Installing YAML::Syck, needed for Koha 20.11 and earlier"
+        docker exec koha_koha_1 apt-get install -y libyaml-syck-perl libemail-valid-perl libmojo-jwt-perl
+        while [ $? -ne 0 ]; do echo "INSTALL YAML::Syck" && docker exec koha_koha_1 apt-get install -y libyaml-syck-perl libemail-valid-perl; done
         echo "SLEEPING 3 MINUTES"
         sleep 60
         echo "1 MINUTE DONE"
@@ -74,10 +110,11 @@ jobs:
         sleep 60
         echo "3 MINUTES DONE"
         echo "WAKING UP"
-        docker exec koha_koha_1 sudo cpanm URI::Encode
+        echo "DOCKER LOGS"
+        docker logs koha_koha_1 2>&1
+        echo "/DOCKER LOGS"
         docker cp $GITHUB_REPO/. koha_koha_1:/var/lib/koha/kohadev/plugins
         docker exec koha_koha_1 bash -c 'prove /var/lib/koha/kohadev/plugins/t'
-        docker logs koha_koha_1
         
     - name: Post test cleanup
       run: |
@@ -91,6 +128,7 @@ jobs:
   release:
     name: Build & Release
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: unit_tests
     strategy:
       fail-fast: false
@@ -105,49 +143,47 @@ jobs:
         echo ::set-output name=github_repo::$GITHUB_REPO
         echo "GITHUB REPO: $GITHUB_REPO"
 
-    - name: Get Previous tag
-      id: previoustag
-      uses: "WyriHaximus/github-action-get-previous-tag@master"
-      env:
-        GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        TAG_VERSION="${GITHUB_REF##*/}"
+        echo "TAG VERSION: $TAG_VERSION"
+        TAG_VERSION="${TAG_VERSION:1}"
+        echo "TAG VERSION 2: $TAG_VERSION"
+        echo ::set-output name=tag_version::$TAG_VERSION
 
-    - name: Get next minor version
-      id: semvers
-      uses: "WyriHaximus/github-action-next-semvers@master"
+    - name: Get Koha Version Branch Name
+      id: koha-version-oldstable
+      uses: "bywatersolutions/github-action-koha-get-version-by-label@master"
       with:
-        version: ${{ steps.previoustag.outputs.tag }}
+        version-label: "oldstable"
+
+    - name: Print minimum version
+      run: |
+        echo "Current oldstable version: ${{ steps.koha-version-oldstable.outputs.version-major-minor }}"
+
+    - name: Dump myvars outputs
+      env:
+        GITHUB_CONTEXT: ${{ toJson(steps.myvars.outputs) }}
+      run: echo "$GITHUB_CONTEXT"
 
     - name: Build Koha Plugin kpz artifact
       id: kpz
       uses: "bywatersolutions/github-action-koha-plugin-create-kpz@master"
       with:
-        release-version: ${{ steps.semvers.outputs.patch }}
-        release-name: ${{ steps.myvars.outputs.GITHUB_REPO }}
+        release-version: ${{ steps.myvars.outputs.tag_version }}
+        release-name: ${{ steps.myvars.outputs.github_repo }}
+        minimum-version: ${{ steps.koha-version-oldstable.outputs.version-major-minor }}
+        plugin-module: "Koha/Plugin/Com/ByWaterSolutions/PayViaNelnet.pm"
 
     - name: See if kpz was created
       run: |
         echo "FILENAME: ${{ steps.kpz.outputs.filename }}"
         ls -alh
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
       with:
-        tag_name: ${{ steps.semvers.outputs.v_patch }}
-        release_name: Release ${{ steps.semvers.outputs.v_patch }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1.0.1
+        files: |
+          ${{ steps.kpz.outputs.filename }}
+          CHANGELOG.md
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./${{ steps.kpz.outputs.filename }}
-        asset_name: ${{ steps.kpz.outputs.filename }}
-        asset_content_type: application/kpz
-
