@@ -180,10 +180,9 @@ sub opac_online_payment_end {
 
                 my $schema = Koha::Database->new->schema;
 
-                my @lines = Koha::Account::Lines->search({ accountlines_id => { -in => $accountlines} });
-                #warn "ACCOUNTLINES TO PAY: " . Data::Dumper::Dumper( $_->unblessed ) for @lines;
+                my @lines = Koha::Account::Lines->search( { accountlines_id => { -in => $accountlines } } )->as_list;
 
-               $schema->txn_do(
+                $schema->txn_do(
                     sub {
                         $dbh->do(
                             "DELETE FROM nelnet_plugin_tokens WHERE token = ?",
