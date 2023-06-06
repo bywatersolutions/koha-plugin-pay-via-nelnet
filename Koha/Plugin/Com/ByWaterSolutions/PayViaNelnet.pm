@@ -279,6 +279,8 @@ sub install() {
 		DEFAULT charset=utf8mb4
 		COLLATE=utf8mb4_unicode_ci;
     };
+    
+    $dbh->do($query);
 
     return 1;
 }
