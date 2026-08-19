@@ -17,13 +17,15 @@
 
 use Modern::Perl;
 
-use Test::More tests => 9;
+use Test::More tests => 10;
 use Test::Exception;
 
+use C4::Context;
 use Koha::Database;
 use Koha::Encryption;
 
 use t::lib::Mocks;
+use t::lib::TestBuilder;
 
 use Koha::Plugin::Com::ByWaterSolutions::PayViaNelnet;
 
@@ -184,6 +186,37 @@ subtest 'a blank credential does not overwrite the stored one' => sub {
     my $template = $plugin->mbf_read('configure.tt');
     unlike( $template, qr/name="key"[^>]*value="\[%\s*key/,
         'configure.tt never renders the stored credential back into the form field' );
+
+    $schema->storage->txn_rollback;
+};
+
+subtest 'cronjob_nightly() removes only abandoned tokens' => sub {
+    plan tests => 3;
+    $schema->storage->txn_begin;
+
+    my $builder = t::lib::TestBuilder->new;
+    my $patron  = $builder->build_object( { class => 'Koha::Patrons' } );
+
+    my $dbh = C4::Context->dbh;
+    $dbh->do(
+        q{INSERT INTO nelnet_plugin_tokens ( token, borrowernumber, created_on ) VALUES ( ?, ?, DATE_SUB(NOW(), INTERVAL 8 DAY) )},
+        undef, 'stale-token', $patron->borrowernumber
+    );
+    $dbh->do(
+        q{INSERT INTO nelnet_plugin_tokens ( token, borrowernumber, created_on ) VALUES ( ?, ?, NOW() )},
+        undef, 'fresh-token', $patron->borrowernumber
+    );
+
+    $plugin->cronjob_nightly;
+
+    my $count = sub {
+        $dbh->selectrow_array( q{SELECT COUNT(*) FROM nelnet_plugin_tokens WHERE token = ?}, undef, $_[0] );
+    };
+    is( $count->('stale-token'), 0, 'a week-old token from an abandoned checkout is removed' );
+    is( $count->('fresh-token'), 1, 'a current token is left alone' );
+
+    $plugin->cronjob_nightly;
+    is( $count->('fresh-token'), 1, 'running the job again changes nothing' );
 
     $schema->storage->txn_rollback;
 };
