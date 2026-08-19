@@ -12,10 +12,26 @@
     <!-- We can access our own plugins resource files using the PLUGIN_PATH variable. -->
     <h3>Koha: Plugin: Pay Via Nelnet: Configuration</h3>
 
-	<form method='get'>
+	[% UNLESS encryption_available %]
+	  <div class="dialog alert">
+		<strong>Koha's encryption is not available.</strong>
+		The key can only be stored in cleartext until an <code>encryption_key</code> is set in
+		<code>koha-conf.xml</code>. Add one (we recommend at least 32 bytes, for example
+		<code>pwgen 32 1</code>), restart Koha, then reopen this page and the stored key will be
+		encrypted automatically.
+	  </div>
+	[% ELSIF key_is_set AND NOT key_is_encrypted %]
+	  <div class="dialog alert">
+		<strong>The stored key is not encrypted.</strong>
+		Re-enter it below and save to store it encrypted.
+	  </div>
+	[% END %]
+
+	<form method='post'>
 	  <input type="hidden" name="class" value="[% CLASS %]"/>
 	  <input type="hidden" name="method" value="[% METHOD %]"/>
 	  <input type="hidden" name="save" value="1" />
+	  [% IF csrf_token %]<input type="hidden" name="csrf_token" value="[% csrf_token | html %]" />[% END %]
 
 	  <div class="form-group">
 			<label for="enable_opac_payments">Enable OPAC Account Payments: </label>
@@ -36,17 +52,24 @@
 
 	  <div class="form-group">
 		<label for="url">Payment URL</label>
-		<input type="text" class="form-control" id="url" name="url" value="[% url %]" />
+		<input type="text" class="form-control" id="url" name="url" value="[% url | html %]" />
 	  </div>
 
 	  <div class="form-group">
 		<label for="orderType">Order Type: </label>
-		<input type="text" class="form-control" name="orderType" value="[% orderType %]" />
+		<input type="text" class="form-control" id="orderType" name="orderType" value="[% orderType | html %]" />
 	  </div>
 
 	  <div class="form-group">
 		<label for="key">Key: </label>
-		<input type="text" class="form-control" name="key" value="[% key %]" />
+		<input type="password" class="form-control" id="key" name="key" value="" autocomplete="new-password" />
+		<p class="help-block">
+		  [% IF key_is_set %]
+			A key is already stored. Leave this blank to keep it, or enter a new one to replace it.
+		  [% ELSE %]
+			No key is stored yet.
+		  [% END %]
+		</p>
 	  </div>
 
 	  <button type="submit" class="btn btn-default">Save</button>
